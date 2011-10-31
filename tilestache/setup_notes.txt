@@ -1,0 +1,15 @@
+apt-get install python-software-properties
+add-apt-repository ppa:developmentseed/mapbox
+apt-get update
+apt-get install libmapnik2-dev
+apt-get install python-mapnik2
+cd /home/tiles/
+apt-get install python-virtualenv
+virtualenv .
+source bin/activate
+cd tilestache/
+pip install -r requirements.txt 
+apt-get install nginx
+vi /etc/nginx/sites-enabled/tiles
+invoke-rc.d nginx restart
+gunicorn "TileStache:WSGITileServer('configs/mybahai.cfg')"

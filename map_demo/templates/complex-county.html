@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ STATIC_URL }}leaflet/leaflet.css" />
+{% endblock %}
+{% block before_body_close %}
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+<script src="{{ STATIC_URL }}leaflet/leaflet.js"></script>
+<script src="{{ STATIC_URL }}js/spin.min.js"></script>
+<script type="text/javascript">
+    var geojson, map;
+    $(document).ready(function(){
+        var spin_opts = {
+          lines: 12, 
+          length: 7, 
+          width: 4, 
+          radius: 10, 
+          color: '#fff', 
+          speed: 1, 
+          trail: 60, 
+          shadow: true 
+        };
+        var target = document.getElementById('spinner');
+        var spinner = new Spinner(spin_opts).spin(target);
+        var streets = new L.TileLayer('http://{s}.tile.cloudmade.com/bcf2471ca35f48a6a4e28a704ba64c9c/998/256/{z}/{x}/{y}.png');
+        var bb = {{ bbox }};
+        var sw = new L.LatLng(bb[1], bb[0], true);
+        var ne = new L.LatLng(bb[3], bb[2], true);
+        var bbox = new L.LatLngBounds(sw,ne);
+        map = new L.Map('map');
+        map.addLayer(streets);
+        map.fitBounds(bbox);
+        $.getJSON('{% url complex-counties %}', function(data){
+            spinner.stop();
+            parse_map_data(data);
+        });
+    });
+    function parse_map_data(data){
+        $.each(data, function(key,val){
+            geojson = new L.GeoJSON();
+            geojson.on('featureparse', function(e){
+                e.layer.on('click', function(e){
+                    shape_click(this);
+                }, e.properties);
+            });
+            geojson.addGeoJSON(val);
+            map.addLayer(geojson);
+        });
+    }
+    function shape_click(shape){
+        var content = '<h3>'+shape['name']+'</h3>';
+        var popup = new L.Popup();
+        var point = new L.LatLng(shape['center'][1],shape['center'][0]);
+        popup.setLatLng(point);
+        popup.setContent(content);
+        var bb = shape['bbox'];
+        var sw = new L.LatLng(bb[1], bb[0], true);
+        var ne = new L.LatLng(bb[3], bb[2], true);
+        var bbox = new L.LatLngBounds(sw,ne);
+        map.fitBounds(bbox);
+        map.openPopup(popup);
+    }
+</script>
+{% endblock %}

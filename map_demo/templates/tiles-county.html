@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block before_body_close %}
+<script type="text/javascript" src="/js/leaflet.js"></script>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.2/jquery.min.js"></script>
+<script type="text/javascript">
+    $(document).ready(function(){
+        var streets = new L.TileLayer('http://{s}.tile.cloudmade.com/bcf2471ca35f48a6a4e28a704ba64c9c/998/256/{z}/{x}/{y}.png');
+        var locs = new L.TileLayer('http://tiles/loc-pop/{z}/{x}/{y}.png');
+        var regions = new L.TileLayer('http://tiles/us-region/{z}/{x}/{y}.png');
+        var clusters = new L.TileLayer('http://tiles/cluster/{z}/{x}/{y}.png');
+        var center = new L.LatLng(47.60793525258652, -122.36486434936522);
+        var map = new L.Map('map');
+	    map.addLayer(streets);
+	    map.addLayer(locs);
+        map.addLayer(regions);
+        map.addLayer(clusters);
+	    map.setView(center,9);
+    });
+</script>
+{% endblock %}
