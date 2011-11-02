@@ -34,10 +34,14 @@ def tiles_county(request):
     bbox = json.dumps(counties.extent())
     return render_to_response('tiles-county.html', { 'bbox': bbox }, context_instance=RequestContext(request))
 
-def map_search(request):
+def map_search(request, template=None):
     counties = County.objects.all()
     places = Place.objects.all()
     bbox = json.dumps(counties.extent())
+    if request.path == '/census/':
+        template = 'census.html'
+    else:
+        template = 'map-search.html'
     if request.is_ajax():
         q = request.GET['search']
         goog = 'http://maps.googleapis.com/maps/api/geocode/json'
@@ -59,7 +63,6 @@ def map_search(request):
             bbox_poly = Polygon.from_bbox(bbox)
             cnts = counties.filter(mpoly__bboverlaps=bbox_poly)
             plcs = places.filter(mpoly__bboverlaps=bbox_poly)
-            d = {}
             c = []
             p = []
             for cnt in cnts.geojson():
@@ -84,4 +87,4 @@ def map_search(request):
             d['places'] = p
         return HttpResponse(json.dumps(d), mimetype='application/json')
     else:
-        return render_to_response('map-search.html', { 'bbox': bbox }, context_instance=RequestContext(request))
+        return render_to_response(template, { 'bbox': bbox }, context_instance=RequestContext(request))

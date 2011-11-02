@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ STATIC_URL }}leaflet/leaflet.css" />
+<link rel="stylesheet" href="{{ STATIC_URL }}css/map.css" />
+{% endblock %}
+{% block search_box %}
+    <div id="search-box">
+        <div>
+            <form id="map-search" method="get">
+                <label for="search">Search</label>
+                <input type="text" id="search" name="search" />
+                <input type="submit" value="Search" id="submit-map-search"/>
+            </form>
+        </div>
+        <div id="search-results">
+            <div id="errors"></div>
+            <div id="counties"></div>
+            <div id="places"></div>
+        </div>
+        <div id="toggle-layers">
+            <label for="counties">Counties</label>
+            <input class="layer-picker" name="counties" type="checkbox" value="counties" checked/><br />
+            <label for="clusters">Places</label>
+            <input class="layer-picker" name="places" type="checkbox" value="places" checked/><br />
+        </div>
+    </div>
+{% endblock %}
+{% block before_body_close %}
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+<script src="{{ STATIC_URL }}leaflet/leaflet.js"></script>
+<script src="{{ STATIC_URL }}js/jquery.form.js"></script>
+<script src="https://raw.github.com/ireapps/census/master/tools/js/ire_census.js"></script>
+<script type="text/javascript">
+    var county_geo, place_geo, map, geojson, counties, places;
+    var census_data = {};
+    $(document).ready(function(){
+        var streets = new L.TileLayer('http://{s}.tile.cloudmade.com/bcf2471ca35f48a6a4e28a704ba64c9c/998/256/{z}/{x}/{y}.png');
+        counties = new L.TileLayer('http://tiles/counties/{z}/{x}/{y}.png');
+        places = new L.TileLayer('http://tiles/places/{z}/{x}/{y}.png');
+        var bb = {{ bbox }};
+        var sw = new L.LatLng(bb[1], bb[0], true);
+        var ne = new L.LatLng(bb[3], bb[2], true);
+        var bbox = new L.LatLngBounds(sw,ne);
+        map = new L.Map('map');
+	    map.addLayer(streets);
+	    map.addLayer(counties);
+        map.addLayer(places);
+        map.fitBounds(bbox);
+        $('#map-search').submit(function(){
+            var url = '{% url map-search %}';
+            var options = {
+                url: url,
+                success: parse_results,
+                resetForm: false
+            };
+            $(this).ajaxSubmit(options);
+            return false;
+        });
+        $('.result').live('click', function(){
+            var cl = $(this).attr('class').split(' ');
+            if (search_array(cl,'clarify')){
+                zoom_detail($(this).attr('id'), cl[1]);
+            }
+        });
+        $('.clarify').live('click', function(){
+            var params = {'search': $(this).text()}
+            $.getJSON('{% url map-search %}', params, function(data){
+                parse_results(data);
+            });
+        });
+        $('.layer-picker').click(function(){
+	        var selected = $(this).val();
+	        if ($(this).is(':checked')){
+	            map.addLayer(eval(selected));
+	        } else {
+	            map.removeLayer(eval(selected));
+	        }
+	    });
+    });
+    function parse_results(resp){
+        $('#counties').children().remove();
+        $('#places').children().remove();
+        $('#errors').children().remove();
+        if (resp['status'] != 'OK'){
+            var info = '<p>' + resp['message'] + '</p>';
+            if (resp['status'] == 'MULTIPLE_MATCHES') {
+                $.each(resp['clarify'], function(key,val){
+                    info += '<p class="result clarify">' + val + '</p>';
+                });
+            }
+            $('#errors').append(info);
+        } else {
+            county_geo = resp['counties'];
+            place_geo = resp['places'];
+            var counties = '<h3>County results</h3>'
+            var places = '<h3>Place results</h3>'
+            $.each(county_geo, function(key,val){
+                fetch_data(val['id'], census);
+                counties += '<p id="' + val['id'] + '" class="result county">' + val['properties']['name'] + '</p>';
+            });
+            $.each(place_geo, function(key,val){
+                fetch_data(val['id'], census);
+                places += '<p id="' + val['id'] + '" class="result place">' + val['properties']['name'] + '</p>';
+            });
+            $('#counties').append(counties);
+            $('#places').append(places);
+        }
+    }
+    function zoom_detail(id, cl){
+        var geo;
+        if (cl == 'place'){
+            geo = place_geo;
+        } else if (cl == 'county'){
+            geo = county_geo;
+        }
+        $.each(geo, function(key, val){
+            if (val['id'] == id){
+                if (geojson){
+                    map.removeLayer(geojson);
+                }
+                geojson = new L.GeoJSON();
+                var content = '<h3>'+val['properties']['name']+'</h3>';
+                content += "<p>The 2010 population of "+ census_data[val['id']]['metadata']['NAME'] + " was " + census_data[val['id']]['data']['2010']['P1']['P001001'] + ".</p>";
+                var popup = new L.Popup();
+                var point = new L.LatLng(val['properties']['center'][1],val['properties']['center'][0]);
+                popup.setLatLng(point);
+                popup.setContent(content);
+                geojson.addGeoJSON(val);
+                map.addLayer(geojson);
+                var bb = val['properties']['bbox'];
+                var sw = new L.LatLng(bb[1], bb[0], true);
+                var ne = new L.LatLng(bb[3], bb[2], true);
+                var bbox = new L.LatLngBounds(sw,ne);
+                map.fitBounds(bbox);
+                map.openPopup(popup);
+            }
+        });
+    }
+    function search_array(arr, obj){
+        return (arr.indexOf(obj) == -1);
+    }
+    function fetch_data(geoid, handler){
+        var callback = 'geoid_' + geoid;
+        var url = 'http://censusdata.ire.org/' + geoid.substr(0,2) + '/' + geoid + '.jsonp';
+        $.ajax(url,{
+            dataType: "jsonp",
+            jsonpCallback: callback,
+            success: census
+        })
+    }
+    function census(data){
+        census_data[data['geoid']] = data;
+        // return "The 2010 population of "+ data['metadata']['NAME'] + " was " + data['data']['2010']['P1']['P001001'] + "."
+    }
+</script>
+{% endblock %}
